@@ -1,0 +1,877 @@
+<script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+    if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+            var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+            var firstSheetName = workbook.SheetNames[0];
+            var worksheet = workbook.Sheets[firstSheetName];
+
+            // Convert sheet to JSON to filter blank rows
+            var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+            // Filter out blank rows (rows where all cells are empty, null, or undefined)
+            var filteredData = jsonData.filter(row => row.some(filledCell));
+
+            // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+            var headerRowIndex = filteredData.findIndex((row, index) =>
+              row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+            );
+            // Fallback
+            if (headerRowIndex === -1 || headerRowIndex > 25) {
+              headerRowIndex = 0;
+            }
+
+            // Convert filtered JSON back to CSV
+            var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+            csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+            return csv;
+        } catch (e) {
+            console.error(e);
+            return "";
+        }
+    }
+    return gk_fileData[filename] || "";
+    }
+    </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Nka_ai</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" defer></script>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    }
+
+    :root {
+        --primary-color: #6a00ff;
+        --primary-light: #8a00ff;
+        --bg-card: rgba(30, 30, 30, 0.7);
+        --text-light: #f0f0f0;
+        --text-secondary: #aaaaaa;
+    }
+
+    body {
+        background: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80') no-repeat center center fixed;
+        background-size: cover;
+        min-height: 100vh;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: var(--text-light);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .rain {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        pointer-events: none;
+    }
+
+    .rain-drop {
+        position: absolute;
+        width: 2px;
+        height: 20px;
+        background: rgba(255, 255, 255, 0.3);
+        animation: fall linear infinite;
+        will-change: transform;
+    }
+
+    @keyframes fall {
+        0% { transform: translateY(-100vh); }
+        100% { transform: translateY(100vh); }
+    }
+
+    .header {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+    }
+
+    .logo {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--primary-color);
+        text-shadow: 0 0 8px rgba(106, 0, 255, 0.4);
+    }
+
+    .main-container {
+        width: 100%;
+        max-width: 900px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 40px;
+        margin-bottom: 100px;
+        z-index: 1;
+    }
+
+    .chat-container {
+        background: var(--bg-card);
+        border-radius: 12px;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        height: calc(100vh - 150px);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .chat-header {
+        padding: 10px 15px;
+        background: rgba(20, 20, 20, 0.5);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        text-align: center;
+    }
+
+    .chat-header-title {
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px;
+        scroll-behavior: smooth;
+    }
+
+    .message {
+        margin-bottom: 15px;
+        animation: slideIn 0.3s ease-out;
+        max-width: 85%;
+        font-size: 13px;
+        will-change: opacity, transform;
+    }
+
+    .user-message {
+        margin-left: auto;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .ai-message {
+        margin-right: auto;
+    }
+
+    .message-bubble {
+        padding: 10px 14px;
+        border-radius: 12px;
+        line-height: 1.4;
+    }
+
+    .user-message .message-bubble {
+        background: var(--primary-color);
+        color: white;
+        border-radius: 12px 2px 12px 12px;
+    }
+
+    .ai-message .message-bubble {
+        background: rgba(60, 60, 60, 0.6);
+        color: var(--text-light);
+        border-radius: 2px 12px 12px 12px;
+    }
+
+    .message-content img {
+        max-width: 100%;
+        border-radius: 8px;
+        margin-top: 8px;
+    }
+
+    .message-content {
+        word-wrap: break-word;
+    }
+
+    .message-content h1, .message-content h2, .message-content h3 {
+        margin: 10px 0 5px;
+    }
+
+    .message-content p {
+        margin-bottom: 8px;
+    }
+
+    .message-content ul, .message-content ol {
+        margin-left: 15px;
+        margin-bottom: 8px;
+    }
+
+    .message-content pre {
+        margin: 8px 0;
+        border-radius: 6px;
+        background: rgba(20, 20, 20, 0.6) !important;
+        overflow-x: auto;
+    }
+
+    .message-content code {
+        border-radius: 4px;
+        padding: 2px 4px;
+        background: rgba(40, 40, 40, 0.6);
+        font-size: 90%;
+    }
+
+    .message-content pre code {
+        padding: 10px;
+        background: transparent;
+        display: block;
+    }
+
+    .message-container {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+
+    .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-weight: 600;
+        font-size: 12px;
+    }
+
+    .user-avatar {
+        background: rgba(106, 0, 255, 0.2);
+        color: var(--primary-color);
+    }
+
+    .ai-avatar {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-light);
+    }
+
+    .uploaded-image {
+        max-width: 250px;
+        max-height: 150px;
+        border-radius: 8px;
+        margin-top: 8px;
+        display: block;
+    }
+
+    .input-area {
+        background: var(--bg-card);
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        position: fixed;
+        bottom: 10px;
+        width: calc(100% - 20px);
+        max-width: 900px;
+        z-index: 2;
+    }
+
+    .message-form {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .model-toggle {
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: rgba(40, 40, 40, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-light);
+        font-size: 13px;
+        cursor: pointer;
+        width: 120px;
+        text-align: center;
+        touch-action: manipulation;
+    }
+
+    .model-toggle:hover {
+        background: rgba(106, 0, 255, 0.15);
+        border-color: var(--primary-color);
+    }
+
+    .message-input-container {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .message-input {
+        width: 100%;
+        padding: 10px 50px 10px 12px;
+        background: rgba(40, 40, 40, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        color: var(--text-light);
+        font-size: 14px;
+        resize: none;
+        min-height: 40px;
+        max-height: 120px;
+        overflow-y: auto;
+        line-height: 1.4;
+        touch-action: manipulation;
+    }
+
+    .attach-button {
+        position: absolute;
+        right: 30px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #888;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 6px;
+        touch-action: manipulation;
+    }
+
+    .attach-button:hover {
+        color: var(--text-light);
+    }
+
+    .send-button {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 6px 12px;
+        border-radius: 10px;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+        touch-action: manipulation;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .send-button:hover {
+        background: var(--primary-light);
+    }
+
+    .send-button i {
+        font-size: 12px;
+    }
+
+    .typing-indicator {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        background: rgba(60, 60, 60, 0.6);
+        border-radius: 12px;
+        max-width: 60px;
+        will-change: opacity;
+    }
+
+    .typing-dot {
+        width: 6px;
+        height: 6px;
+        background: #aaa;
+        border-radius: 50%;
+        margin: 0 2px;
+        animation: typing 1.2s infinite;
+        will-change: transform;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-4px); }
+    }
+
+    @media (max-width: 768px) {
+        body {
+            padding: 5px;
+        }
+
+        .main-container {
+            margin-top: 30px;
+            margin-bottom: 120px;
+        }
+
+        .chat-container {
+            height: calc(100vh - 140px);
+        }
+
+        .message {
+            max-width: 95%;
+        }
+
+        .message-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .model-toggle {
+            width: 100%;
+            max-width: 200px;
+            margin-bottom: 8px;
+        }
+
+        .message-input-container {
+            width: 100%;
+            position: relative;
+        }
+
+        .message-input {
+            padding-right: 80px;
+        }
+
+        .attach-button {
+            right: 50px;
+        }
+
+        .send-button {
+            right: 10px;
+            width: 40px;
+            padding: 6px;
+        }
+
+        .image-preview {
+            max-width: 100px;
+            max-height: 100px;
+        }
+
+        .input-area {
+            bottom: 5px;
+            width: calc(100% - 10px);
+        }
+
+        .header {
+            top: 5px;
+            left: 5px;
+        }
+
+        .logo {
+            font-size: 16px;
+        }
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    #imageUpload {
+        display: none;
+    }
+
+    .image-preview-container {
+        margin-top: 8px;
+        display: none;
+        text-align: center;
+    }
+
+    .image-preview {
+        max-width: 80px;
+        max-height: 80px;
+        border-radius: 6px;
+        object-fit: cover;
+    }
+
+    .image-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        font-size: 12px;
+    }
+
+    .remove-image {
+        background: rgba(255, 60, 60, 0.8);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 10px;
+        touch-action: manipulation;
+    }
+
+    ::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(106, 0, 255, 0.3);
+        border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(106, 0, 255, 0.5);
+    }
+</style>
+</head>
+<body>
+<div class="rain" id="rain"></div>
+
+<div class="header">
+    <div class="logo">Nka_ai</div>
+</div>
+
+<div class="main-container">
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="chat-header-title">Чат с ИИ</div>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+    </div>
+</div>
+
+<div class="input-area">
+    <div class="image-preview-container" id="imagePreviewContainer">
+        <div class="image-preview-header">
+            <span>Загруженное изображение</span>
+            <button class="remove-image" id="removeImage"><i class="fas fa-times"></i></button>
+        </div>
+        <img id="imagePreview" class="image-preview">
+    </div>
+
+    <div class="message-form">
+        <button id="modelToggle" class="model-toggle">Математика</button>
+        <div class="message-input-container">
+            <textarea id="messageInput" class="message-input" placeholder="Введите сообщение..." rows="1"></textarea>
+            <button class="attach-button" id="attachButton"><i class="fas fa-paperclip"></i></button>
+            <button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button>
+            <input type="file" id="imageUpload" accept="image/*">
+        </div>
+    </div>
+</div>
+
+<script>
+    // Генерация капель дождя
+    function createRain() {
+        const rainContainer = document.getElementById('rain');
+        if (!rainContainer) return;
+        const dropCount = window.innerWidth < 768 ? 30 : 50;
+        for (let i = 0; i < dropCount; i++) {
+            const drop = document.createElement('div');
+            drop.className = 'rain-drop';
+            drop.style.left = `${Math.random() * 100}%`;
+            drop.style.animationDuration = `${Math.random() * 0.5 + 0.5}s`;
+            drop.style.animationDelay = `${Math.random() * 2}s`;
+            rainContainer.appendChild(drop);
+        }
+    }
+    window.addEventListener('load', createRain);
+
+    // Инициализация API ключей
+    const apiKeys = {
+        math: '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',
+        programming: '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',
+        chat: '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'
+    };
+
+    // Настройка компонентов
+    document.addEventListener('DOMContentLoaded', () => {
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const modelToggle = document.getElementById('modelToggle');
+        const attachButton = document.getElementById('attachButton');
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const removeImage = document.getElementById('removeImage');
+
+        if (!chatMessages || !messageInput || !sendButton || !modelToggle || !attachButton || !imageUpload || !imagePreviewContainer || !imagePreview || !removeImage) {
+            console.error('Один или несколько DOM-элементов не найдены');
+            return;
+        }
+
+        // Переменные для хранения состояния
+        let currentModel = 'math';
+        let uploadedImage = null;
+        const models = ['math', 'programming', 'chat'];
+        const modelLabels = {
+            math: 'Математика',
+            programming: 'Программирование',
+            chat: 'Собеседник'
+        };
+        let currentModelIndex = 0;
+
+        // Автоматическое изменение высоты текстового поля
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
+        });
+
+        // Переключение модели
+        modelToggle.addEventListener('click', () => {
+            currentModelIndex = (currentModelIndex + 1) % models.length;
+            currentModel = models[currentModelIndex];
+            modelToggle.textContent = modelLabels[currentModel];
+        });
+
+        // Обработка загрузки изображения
+        attachButton.addEventListener('click', () => {
+            imageUpload.click();
+        });
+
+        imageUpload.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                uploadedImage = file;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    imagePreview.src = event.target.result;
+                    imagePreviewContainer.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        removeImage.addEventListener('click', () => {
+            uploadedImage = null;
+            imagePreview.src = '';
+            imagePreviewContainer.style.display = 'none';
+            imageUpload.value = '';
+        });
+
+        // Отправка сообщения
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message && !uploadedImage) return;
+
+            const apiKey = apiKeys[currentModel];
+
+            // Показываем сообщение пользователя
+            addUserMessage(message, uploadedImage);
+
+            // Сбрасываем поле ввода
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Показываем индикатор загрузки
+            const typingIndicator = showTypingIndicator();
+
+            // Подготовка контента для запроса
+            let content = message;
+            
+            if (uploadedImage) {
+                content += "\n[Пользователь загрузил изображение]";
+            }
+
+            // Сбрасываем загруженное изображение
+            uploadedImage = null;
+            imagePreview.src = '';
+            imagePreviewContainer.style.display = 'none';
+
+            // Отправка запроса к API
+            fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'openai/gpt-3.5-turbo',
+                    messages: [{ role: 'user', content: content }]
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Ошибка сети: ${response.status} - ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+                    throw new Error('Некорректный ответ от API');
+                }
+                // Удаляем индикатор загрузки
+                typingIndicator.remove();
+
+                // Добавляем ответ ИИ
+                const aiResponse = data.choices[0].message.content;
+                addAIMessage(aiResponse);
+            })
+            .catch(error => {
+                console.error('Ошибка:', error.message);
+                typingIndicator.remove();
+                addAIMessage(`Произошла ошибка: ${error.message}. Пожалуйста, попробуйте еще раз.`);
+            });
+        }
+
+        // Функция для добавления сообщения пользователя
+        function addUserMessage(text, image = null) {
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'message user-message';
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-container';
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar user-avatar';
+            avatar.textContent = 'ВЫ';
+            messageContent.appendChild(avatar);
+            const messageBubble = document.createElement('div');
+            messageBubble.className = 'message-bubble';
+            const messageText = document.createElement('div');
+            messageText.className = 'message-content';
+            messageText.textContent = text;
+            messageBubble.appendChild(messageText);
+            if (image) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'uploaded-image';
+                    messageBubble.appendChild(img);
+                };
+                reader.readAsDataURL(image);
+            }
+            messageContent.appendChild(messageBubble);
+            messageContainer.appendChild(messageContent);
+            chatMessages.appendChild(messageContainer);
+            scrollToBottom();
+        }
+
+        // Функция для добавления сообщения ИИ
+        function addAIMessage(text) {
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'message ai-message';
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-container';
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar ai-avatar';
+            avatar.textContent = 'AI';
+            messageContent.appendChild(avatar);
+            const messageBubble = document.createElement('div');
+            messageBubble.className = 'message-bubble';
+            const messageText = document.createElement('div');
+            messageText.className = 'message-content';
+            messageText.innerHTML = parseMarkdown(text);
+            messageBubble.appendChild(messageText);
+            messageContent.appendChild(messageBubble);
+            messageContainer.appendChild(messageContent);
+            chatMessages.appendChild(messageContainer);
+            renderMathInElement(messageText, {
+                delimiters: [
+                    { left: "$$", right: "$$", display: true },
+                    { left: "$", right: "$", display: false },
+                    { left: "\\(", right: "\\)", display: false },
+                    { left: "\\[", right: "\\]", display: true }
+                ],
+                throwOnError: false
+            });
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            scrollToBottom();
+        }
+
+        // Отображение индикатора печати
+        function showTypingIndicator() {
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'message ai-message';
+            messageContainer.id = 'typingIndicator';
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-container';
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar ai-avatar';
+            avatar.textContent = 'AI';
+            messageContent.appendChild(avatar);
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'typing-indicator';
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'typing-dot';
+                typingIndicator.appendChild(dot);
+            }
+            messageContent.appendChild(typingIndicator);
+            messageContainer.appendChild(messageContent);
+            chatMessages.appendChild(messageContainer);
+            scrollToBottom();
+            return messageContainer;
+        }
+
+        // Функция для разбора Markdown с поддержкой кода
+        function parseMarkdown(text) {
+            marked.setOptions({
+                langPrefix: 'hljs language-',
+                highlight: function(code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                }
+            });
+            return marked.parse(text);
+        }
+
+        // Прокрутка чата вниз
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Показать приветственное сообщение
+        window.onload = function() {
+            addAIMessage(`
+👋 Привет! Я Nka_ai. Нажми на кнопку модели, чтобы переключить режим: Математика, Программирование или Собеседник.
+Например, попробуй спросить:  
+- Как решить уравнение $x^2 - 4x + 3 = 0$?  
+- Напиши код на Python для сортировки массива.  
+- Расскажи анекдот!
+            `);
+        }
+
+        // Пересоздание капель дождя при изменении размера окна
+        window.addEventListener('resize', () => {
+            document.getElementById('rain').innerHTML = '';
+            createRain();
+        });
+    });
+
+    // Обработка ошибок загрузки библиотек
+    window.addEventListener('error', (event) => {
+        console.error('Ошибка загрузки скрипта или стилей:', event.message);
+    });
+</script>
+</body>
+</html>
